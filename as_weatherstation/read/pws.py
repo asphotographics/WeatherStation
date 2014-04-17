@@ -54,7 +54,8 @@ class AS_WS_READER_PWS(mod_ws_read_abstract.AS_WS_READER):
 			self.phidgetIFK = mod_lphidget.PHIDGET_IFK(
 				self.station.interfaceKitID,
 				remoteHost=self.station.remoteHost,
-				onInputChangeHandler=onInputChangeHandler
+				onInputChangeHandler=onInputChangeHandler,
+                waitForAttach=2000
 				)
 		else:
 			self.phidgetIFK = mod_lphidget.PHIDGET_IFK(
