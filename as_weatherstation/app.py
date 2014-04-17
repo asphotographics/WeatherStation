@@ -1,6 +1,7 @@
 #! /usr/bin/python
 # coding: utf-8
 
+from collections import OrderedDict
 
 # Bitwise measurement types
 MEASURE_ABSTRACT = 0
@@ -94,18 +95,26 @@ class AS_WS_APP(object):
             sID = self._config.getint('stations', sLabel)
             sSection = "station%d" % sID
             sOptions = self._config.options(sSection)
-            params = {}
+            options = {}
+
+            # stype is required
+            stype = self._config.get(sSection, 'stype')
+
+            sclass = STYPE_CLASS_LOOKUP[stype]
+
+            # Get the option spec for stype
+            optionsSpec = sclass.optionsSpec()
 
             for o in sOptions :
                 # Because station options are quite dynamic, we have a helper
                 # convert the values to the proper types for us.
-                params[o] = mod_config_app.getStationOption(self._config, sSection, o)
+                options[o] = mod_config_app.getStationOption(self._config, optionsSpec, sSection, o)
 
-            self.stations[sLabel] = AS_WS_STATION(
+            self.stations[sLabel] = sclass(
                 self,
                 sLabel,
                 sID,
-                params
+                options
                 )
 
 
@@ -320,16 +329,17 @@ class AS_WS_APP(object):
 
 
 
-class AS_WS_STATION(object):
+class AS_WS_STATION_ABSTRACT(object):
     """Generic station details"""
-    
-    def __init__(self, wsApp, label, id, params):
 
+    def __init__(self, wsApp, label, id, options):
+
+        
         self.app = wsApp
         self.label = label
         self.id = id
-        for param in params :
-            self.__dict__[param] = params[param]
+        for option in options :
+            self.__dict__[option] = options[option]
 
 
     def getLogFile(self): return self.app.getLogFile(self.id)
@@ -343,8 +353,87 @@ class AS_WS_STATION(object):
     def delTimestampFile(self): raise ValueError('AS_WS_STATION.timestampFile attribute is read-only')
     timestampFile = property(getTimestampFile, setTimestampFile, delTimestampFile, None)
 
+    @staticmethod
+    def optionsSpec():
+
+        # Specify options used by this station type
+        # This is used by the config reader and creator to figure out
+        # which options are needed and what type to expect.
+        #
+        # Key is option name.
+        # Value is option type or list of types.
+        # If option is optional, the set value to something like [None, int].
+        options = OrderedDict()
+        options['stype'] = str
+        options['elevation'] = int
+
+        return options
 
 
+
+class AS_WS_STATION_PWS(AS_WS_STATION_ABSTRACT):
+
+    @staticmethod
+    def optionsSpec():
+
+        from decimal import Decimal
+
+        options = AS_WS_STATION_ABSTRACT.optionsSpec()
+        options['interfaceKitID'] = int
+        options['textLCDID'] = [None, int]
+        options['intervalSensorSample'] = int
+        options['intervalSensorLog'] = int
+        options['sensorBP'] = int
+        options['sensorInternalTemp'] = int
+        options['sensorLoad'] = int
+        options['sensorRH'] = int
+        options['sensorTemp'] = int
+        options['rainGaugeArea'] = Decimal
+        options['rainGaugeVolume'] = Decimal
+        options['inputRG'] = int
+        options['remoteHost'] = [None, str]
+
+        return options
+
+
+
+
+class AS_WS_STATION_NETATMO_DEVICE(AS_WS_STATION_ABSTRACT):
+
+    @staticmethod
+    def optionsSpec():
+
+        options = AS_WS_STATION_ABSTRACT.optionsSpec()
+        options['deviceID'] = str
+
+        return options
+
+
+
+class AS_WS_STATION_NETATMO_MODULE(AS_WS_STATION_NETATMO_DEVICE):
+
+    @staticmethod
+    def optionsSpec():
+
+        options = AS_WS_STATION_NETATMO_DEVICE.optionsSpec()
+        options['deviceID'] = str
+        options['moduleID'] = str
+
+        return options
+
+
+
+class AS_WS_STATION_NETATMO_MODULE_INDOOR(AS_WS_STATION_NETATMO_MODULE):
+    pass
+
+
+# Station class lookup
+STYPE_CLASS_LOOKUP = OrderedDict([
+    (STYPE_PWS, AS_WS_STATION_PWS),
+    (STYPE_NETATMO_DEVICE, AS_WS_STATION_NETATMO_DEVICE),
+    (STYPE_NETATMO_MODULE, AS_WS_STATION_NETATMO_MODULE),
+    (STYPE_NETATMO_MODULE_INDOOR, AS_WS_STATION_NETATMO_MODULE_INDOOR)
+    ])
 
 
 
