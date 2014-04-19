@@ -144,6 +144,8 @@ class AS_WS_WRITER_TEXTLCD(mod_ws_write_abstract.AS_WS_WRITER):
         - options int: Bitwise cobination of TEXTLCD_OPT*. Enables display of additional data, such as
             sample time, station IP addresses, etc.
         """
+
+        from as_weatherstation.util import getInterfaces
         
         # Split the latest sample off from the previous ones
         if len(samples) > 1:
@@ -210,7 +212,7 @@ class AS_WS_WRITER_TEXTLCD(mod_ws_write_abstract.AS_WS_WRITER):
             lines.append(time.strftime("%Y-%m-%d %H:%M:%S", current.dateTime))
 
         if options & TEXTLCD_OPT_NET:
-           for interface in self.getInterfaces():
+           for interface in getInterfaces():
                 lines.append('%s %s' % (interface['interface'], interface['ip']))
             
 
@@ -407,34 +409,6 @@ class AS_WS_WRITER_TEXTLCD(mod_ws_write_abstract.AS_WS_WRITER):
         """ Calculates the average for a given set of measurements """
 
         return sum(measurements)/len(measurements)
-
-
-
-    def getInterfaces(self):
-        """ Get the IP addresses of the network interfaces """
-
-        import subprocess
-
-        regex = re.compile("^((eth|en|wlan)\d+).*(HWaddr|ether) ([^ ]+).*(addr:|inet )([^ ]+)", re.MULTILINE|re.DOTALL)
-
-        interfaces = []
-        for interface in ['en0', 'en1', 'eth0', 'wlan0']:
-
-            try:
-                a = subprocess.check_output('ifconfig %s' % interface, shell=True, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError as e:
-                continue
-                
-            result = regex.match(a)
-
-            if result != None:
-                interF = result.group(1)
-                mac = result.group(4)
-                ip = result.group(6)
-
-                interfaces.append({'interface': interF, 'ip': ip, 'mac': mac})
-
-        return interfaces
 
 
 

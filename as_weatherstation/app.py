@@ -1,7 +1,11 @@
 #! /usr/bin/python
 # coding: utf-8
 
+import os
 from collections import OrderedDict
+import re
+
+import ConfigParser
 
 # Bitwise measurement types
 MEASURE_ABSTRACT = 0
@@ -33,7 +37,9 @@ PWS_IO_OUTPUT = 2
 LOGFILE_CURRENT = 1 # the file that is currently being logged to
 LOGFILE_BACKUP = 2 # backup files created by log rotate (have ".[datatime]" appended, possibly GZIPed)
 LOGFILE_IMPORTED = 4 # file that has already been imported into the DB (GZIPed)
-LOGFILE_ALL = 7 # All -- update this if adding new types
+LOGFILE_UPLOADED = 8 # files that have been uploaded to the FTP server
+LOGFILE_DOWNLOADED = 16 # files downloaded from the FTP server
+LOGFILE_ALL = 31 # All -- update this if adding new types
 
 
 DB_MAIN = 1 # main database
@@ -52,8 +58,8 @@ class AS_WS_APP(object):
 
         # Log file location
         self._setDataFolder(self._config.get('app', 'dataFolder'))
-        self.importedPrefix = "log.imported"
 
+        self.logFileDatePattern = '(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})'
 
         """
         Stations
@@ -88,7 +94,7 @@ class AS_WS_APP(object):
 
         Stations are configured in app.cfg
         """
-        self.stations = {}
+        self.stations = OrderedDict()
         sList = self._config.options('stations')
         for sLabel in sList :
 
@@ -130,6 +136,17 @@ class AS_WS_APP(object):
             self._config.get(dbSection, 'password'),
             self._config.get(dbSection, 'database')
             )
+
+
+        try:
+            self.ftp = {
+                'host': self._config.get('ftp', 'host'),
+                'username': self._config.get('ftp', 'username'),
+                'password': self._config.get('ftp', 'password'),
+                'path': self._config.get('ftp', 'path')
+                }
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
+            self.ftp = {'host':'', 'username':'', 'password': '', 'path':''}
 
 
 
@@ -220,17 +237,28 @@ class AS_WS_APP(object):
 
     def _setDataFolder(self, folder):
         """ Set the path to the data folder, which in turn defines paths to all the sub folders and files """
-        self.dataFolder = folder
+        self.dataFolder = os.path.join(folder, '')
+
+        # Subfolders
         self.logFolder = self.dataFolder + "log/"
         self.importedFolder = self.logFolder + "imported/"
+        self.uploadedFolder = self.logFolder + "uploaded/"
+        self.downloadedFolder = self.logFolder + "downloaded/"
+
         self.errorFile = self.dataFolder + "error.txt"
 
         self.logFileName = "log_station_%d.txt"
+        self.logFileNamePattern = "log_station_\d+.txt"
 
         self.logFile = self.logFolder + self.logFileName
         self.timestampFile = self.logFolder + "latest_station_%d.txt"
 
-        self.importedFolder = self.logFolder + "imported/"
+
+        self.subfolders = OrderedDict()
+        self.subfolders[LOGFILE_BACKUP] = self.logFolder
+        self.subfolders[LOGFILE_IMPORTED] = self.importedFolder
+        self.subfolders[LOGFILE_UPLOADED] = self.uploadedFolder
+        self.subfolders[LOGFILE_DOWNLOADED] = self.downloadedFolder
 
 
     def getLogFile(self, stationID):
@@ -251,72 +279,109 @@ class AS_WS_APP(object):
     def listLogFiles(self, stationID, lftype=LOGFILE_ALL):
         """ Get a list of log files by class: LOGFILE_CURRENT, LOGFILE_BACKUP,  LOGFILE_IMPORTED, LOGFILE_ALL """
 
-        from os import listdir
-        from os.path import isfile, join
-        import re
-
         files = {}
-
-        datePattern = '(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})'
 
         if lftype & LOGFILE_CURRENT:
 
             files[LOGFILE_CURRENT] = []
             f = self.getLogFile(stationID)
-            if isfile(f):
+            if os.path.isfile(f):
                 files[LOGFILE_CURRENT].append(f)
 
+        for t in self.subfolders:
 
-        if lftype & LOGFILE_BACKUP:
+            if lftype & t:
 
-            files[LOGFILE_BACKUP] = []
-            allFiles = AS_WS_APP.listDirectoryFiles(self.logFolder)
-            regex = re.compile(re.escape('%s.'%self.getLogFile(stationID)) + datePattern)
-            for f in allFiles:
-                if not regex.match(f) is None:
-                    files[LOGFILE_BACKUP].append(f)
-
-
-        if lftype & LOGFILE_IMPORTED:
-
-            files[LOGFILE_IMPORTED] = []
-            allFiles = AS_WS_APP.listDirectoryFiles(self.importedFolder)
-            regex = re.compile(re.escape('%s%s.'%(self.importedFolder, self.getLogFileName(stationID))) + datePattern)
-            for f in allFiles:
-                if not regex.match(f) is None:
-                    files[LOGFILE_IMPORTED].append(f)
-
+                files[t] = []
+                allFiles = AS_WS_APP.listDirectoryFiles(self.subfolders[t])
+                path = self.joinPath(self.subfolders[t], self.getLogFileName(stationID))  
+                regex = re.compile(re.escape('%s.' % path) + self.logFileDatePattern)
+                for f in allFiles:
+                    if not regex.match(f) is None:
+                        files[t].append(f)
 
         return files
+
+
+
+    def isLogFile(self, path, stationID=False):
+        """
+        Check that a path string contains what looks like a log file name.
+
+        @param path string - Path to check. Can also just be a file name.
+        @param stationID - If not False, then check to see if file belongs
+            to given station. Otherwise, stationID is a wildcard and any
+            station's log file will match.
+
+        @return bool
+        """
+
+        if stationID:
+            pattern = self.getLogFileName(stationID)
+        else:
+            pattern = self.logFileNamePattern
+
+        regex = re.compile(pattern)
+
+        return bool(regex.match(path))
+
+
+
+    def joinPath(self, *args):
+        return os.path.join(*args)
 
 
 
     @staticmethod
     def listDirectoryFiles(directory):
         """ Get a list of files in a direcotry """
-        from os import listdir
-        from os.path import isfile, join
-        return [ join(directory,f) for f in listdir(directory) if isfile(join(directory,f)) ]
+        return [ os.path.join(directory,f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory,f)) ]
 
 
 
     def moveLogFileToImported(self, logFile, compress=True):
         """ Move a file to the 'imported' folder with optional gzip compression. Returns new file path. """
-        import shutil, os, re
+        return self.moveFile(logFile, self.importedFolder, compress)
 
-        dest = '%s%s' % (self.importedFolder, os.path.basename(logFile))
-        if compress and not re.compile('\.gz$').findall(logFile):
-            src = self.gZipFile(logFile)
-            os.remove(logFile)
-            return self.moveLogFileToImported(src, False)
+    def moveLogFileToUploaded(self, logFile, compress=True):
+        """ Move a file to the 'uploaded' folder with optional gzip compression. Returns new file path. """
+        return self.moveFile(logFile, self.uploadedFolder, compress)
+
+    def moveLogFileToDownloaded(self, logFile, compress=True):
+        """ Move a file to the 'downloaded' folder with optional gzip compression. Returns new file path. """
+        return self.moveFile(logFile, self.downloadedFolder, compress)
+
+
+    def moveFile(self, aFile, destFolder, compress=True):
+        """
+        Move a file to folder with optional gzip compression.
+
+        @param aFile string - Path of file to move.
+        @param destFolder string - Where to put the file. Directory must exist and be writable.
+        @param compress bool - If true file is gzip compressed (if not already) before moving.
+
+        @return string - new file path
+        """
+        import shutil
+
+        dest = os.path.join(destFolder, os.path.basename(aFile))
+        if compress and not self.isGZipped(aFile):
+            src = self.gZipFile(aFile, keepOriginal=False)
+            return self.moveFile(src, destFolder, False)
         else:
-            shutil.move(logFile, dest)
+            shutil.move(aFile, dest)
             return dest
             
 
 
-    def gZipFile(self, aFile):
-        """ Compress a file using gzip. The original file is left in place. Returns gzip file path. """
+    def gZipFile(self, aFile, keepOriginal=True):
+        """
+        Compress a file using gzip.
+        
+        @param keepOriginal bool - If True, the original file is left in place,
+            else it is removed.
+        @return str - new gzip'ed file path
+        """
         import gzip
         zFile = '%s.gz' % aFile
         f_in = open(aFile, 'rb')
@@ -324,7 +389,15 @@ class AS_WS_APP(object):
         f_out.writelines(f_in)
         f_out.close()
         f_in.close()
+        if not keepOriginal:
+            os.remove(aFile)
         return zFile
+
+
+    def isGZipped(self, aFile):
+        """ Check a file to see if it ends int .gz """
+        import re
+        return (re.compile('\.gz$').search(aFile) is not None)
 
 
 

@@ -1,4 +1,5 @@
 #! /usr/bin/python
+# encoding=utf-8
 
 def config(errorFile, params):
     """ Helper to parse logging configuration """
@@ -11,6 +12,14 @@ def config(errorFile, params):
 
     if not 'wsApp' in params:
         params['wsApp'] = None
+    
+    import os.path
+
+    # We are going to store the message file in the same folder as errorFile
+    # This way, we don't have to go change all our callers.
+    messageFile = os.path.join(os.path.dirname(errorFile), 'messages.txt')
+
+    errorFile
 
     import logging
     import logging.config
@@ -19,21 +28,29 @@ def config(errorFile, params):
         'disable_existing_loggers': False,
         'formatters': {
             'message': {
-                'format': '%(message)s',
+                'format': '%(message)s'
                 },
             'simple': {
                 'format': '%(asctime)s - %(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s',
-                'datefmt': '%Y-%m-%d %H:%M:%S',
+                'datefmt': '%Y-%m-%d %H:%M:%S'
                 },
             'brief': {
-                'format': '%(name)s - $(filename)s (%(lineno)d) - %(levelname)s - %(message)s',
+                'format': '%(name)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s'
+                },
+            'brieftime': {
+                'format': '%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s',
+                'datefmt': '%Y-%m-%d %H:%M:%S'
+                },
+            'briefnoname': {
+                'format': '%(filename)s:%(lineno)d - %(levelname)s - %(message)s'
                 }
             },
         'handlers': {
             'console': {
                 'class': 'logging.StreamHandler',
-                'formatter': 'simple',
-                'stream': 'ext://sys.stdout'
+                'formatter': 'briefnoname',
+                'stream': 'ext://sys.stdout',
+                'level': 'INFO'
                 },
             'error_file': {
                 'class': 'logging.handlers.RotatingFileHandler',
@@ -41,6 +58,14 @@ def config(errorFile, params):
                 'filename': errorFile,
                 'maxBytes': 1024*1024,
                 'backupCount': 10,
+                'delay': True
+                },
+            'message_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'brieftime',
+                'filename': messageFile,
+                'maxBytes': 1024*1024,
+                'backupCount': 4,
                 'delay': True
                 },
             'dbhandler': {
@@ -56,6 +81,11 @@ def config(errorFile, params):
                 'handlers': ['error_file'],
                 'propagate': False
                 },
+            'as_weatherstation.log.message': {
+                'level': 'INFO',
+                'handlers': ['message_file'],
+                'propagate': False
+                },
             'as_weatherstation.write.db': {
                 'level': 'INFO',
                 'handlers': ['dbhandler'],
@@ -63,7 +93,6 @@ def config(errorFile, params):
                 }
             },
         'root': {
-            'level': 'DEBUG',
             'handlers': ['console']
             }
         }
