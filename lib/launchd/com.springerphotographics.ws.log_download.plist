@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.springerphotographics.ws.log_download</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/local/bin/python</string>
+		<string>/Users/aaron/WeatherStation/controller_log_download.py</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/aaron/log/ws.error</string>
+	<key>StandardOutPath</key>
+	<string>/Users/aaron/log/ws.log</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>Nice</key>
+	<integer>1</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/aaron/WeatherStation/</string>
+	<key>StartInterval</key>
+	<integer>3600</integer>
+	<key>EnableGlobbing</key>
+	<true/>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>LANG</key>
+		<string>en_CA.UTF-8</string>
+	</dict>
+</dict>
+</plist>
