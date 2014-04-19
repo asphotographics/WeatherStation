@@ -37,7 +37,8 @@ class AS_WS_WRITER_LOG(mod_ws_write_abstract.AS_WS_WRITER):
             self.log_logger.info(mod_ws_log_weather.getLogString(row))
 
         # Close the log file so other process can use it
-        self.log_logger.handlers[0].close()
+        self.log_logger.handlers[0].stream.close()
+        self.log_logger.handlers[0].stream = None
 
 
         # Write timestamp to log so we know the last time archiver ran
@@ -46,5 +47,6 @@ class AS_WS_WRITER_LOG(mod_ws_write_abstract.AS_WS_WRITER):
             self.timestamp_logger.info(mod_ws_log_timestamp.getLogString([sampleTime]))
 
             # Close the timestamp file so other processes can use it
-            self.timestamp_logger.handlers[0].close()
+            self.timestamp_logger.handlers[0].stream.close()
+            self.timestamp_logger.handlers[0].stream = None
 
