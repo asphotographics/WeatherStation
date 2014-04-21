@@ -1,1 +1,1 @@
-DIR=/usr/userapps/pws/
+DIR=/usr/userapps/pws

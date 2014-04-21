@@ -1,6 +1,11 @@
 #!/bin/bash
 
-INIT_DIR="/etc/init.d"
+# Inlcude some init-related functions
+. /lib/lsb/init-functions
+
+INIT_DIR="/etc/init.d/"
+
+#echo $BASH_SOURCE
 
 test_for_watchdog()
 {
@@ -44,11 +49,11 @@ handle_watchdog_daemon_check()
     # Handle watch dog check/test/repair requests.
     # 
     # Usage: handle_watchdog_daemon_check -d path -n name
-    #        handle_watchdog_daemon_check -d path -n name [test]
-    #        handle_watchdog_daemon_check -d path -n name [repair]
+    #        handle_watchdog_daemon_check -d path -n name test
+    #        handle_watchdog_daemon_check -d path -n name repair
     #
-    # -d  the path to the daemon executable
-    # -n  name of the daemon as defined in its /etc/init.d/ script
+    #   -d - the path to the daemon executable
+    #   -n - name of the daemon as defined in its /etc/init.d/ script
     #
     # If watchdog is configured with the test-binary option, then it will try
     # to execute a binary file without any arguements. That binary file can
@@ -61,7 +66,6 @@ handle_watchdog_daemon_check()
     # try to execute binaries in that folder with the argument "test", and if
     # that fails, with the arguement "repair". A binary in the test-directory
     # can call this function to handle the testing and repair of a daemon.
-
 
     local daemon daemon_name status OPTIND
 
@@ -93,11 +97,11 @@ handle_watchdog_daemon_check()
             status="$?"
             ;;
 
-        # repair requested
-        repair)
-            repair_for_watchdog "$daemon_name"
-            status="$?"
-            ;;
+        # repair is the same as our default plan (test and then fix)
+        #repair)
+            #repair_for_watchdog "$daemon_name"
+            #exit "$?"
+            #;;
 
         # no command specified, so test and then repair if necessary.
         *)
@@ -114,6 +118,115 @@ handle_watchdog_daemon_check()
     #echo "status $status"
 
     # If exit status is non-zero, then watchdog will do a reboot.
-    exit $status
+    [ $status -ne 0 ] && exit $status
 }
 
+run_loop()
+{
+    # Execute a given command inside a run loop
+    # 
+    # Usage: run_loop [-n iterations] [-i interval] command
+    #   -n - Numer of times to loop. Zero = forever.
+    #   -i - Interval (seconds) to wait between loop executions.
+    #   command - string which will be passed to eval
+    get_lock
+
+    local iterations counter interval limit OPTIND
+
+    iterations=100
+    counter=0
+    interval=60
+    limit="$iterations"
+    OPTIND=1
+
+    # Parse the -d and -n options from the function arguements.
+    while getopts ":n:i:" opt ; do
+        case "$opt" in
+            n) iterations="$OPTARG";;
+            i) interval="$OPTARG";;
+        esac
+    done
+
+
+    # Shift $@ over n positions, thus dropping the -d and -n options
+    # and leaving everything else.
+    shift $(($OPTIND - 1))
+
+    # Set up inifinite loop
+    if [ $iterations -eq 0 ]; then
+        limit=1
+    fi
+
+    # Enter main run loop
+    while [  $counter -lt $limit ]; do
+
+        # Evaluter the command
+        eval "$@"
+        sleep "$interval"
+
+        # If iterations is zero then don't increment counter
+        if [ $iterations -gt 0 ]; then
+            let counter=counter+1 
+        fi
+
+    done
+
+    exit 0
+}
+
+
+GET_LOCK_RAN=0
+get_lock()
+{
+    # Get a lock using .pdf file.
+    # 
+    # Usage: get_lock
+    #
+    # This can be used to prevent multiple-instances of a script from
+    # being run in parallel. If a lock exists then exit is called
+    # with a status of zero.
+    #
+    # The lockfile is automatically removed prior to exiting and if
+    # the script receives any of the following singals: SIGHUP,
+    # SIGINT, SIGQUIT, SIGPIPE, SIGTERM.
+
+    local scriptname lockfile
+
+    # Only let get_lock be run once
+    [ $GET_LOCK_RAN -gt 1 ]  && return
+    GET_LOCK_RAN=1
+
+    # Define the location of the lock
+    scriptname=`basename $0`
+    lockfile="/var/run/$scriptname.pid"
+
+    # Use a lockfile containing the pid of the running process
+    # If script crashes and leaves lockfile around, it will have a
+    # different pid so will not prevent script running again.
+
+    # Create empty lock file if none exists
+    cat /dev/null >> $lockfile
+    read lastPID < $lockfile
+
+    # There is a race condition between when we read the .pid, check
+    # for a running process and then write our .pid here. In other
+    # words, if scripts are spawned really quickly we may end up with
+    # multiple processes running. flock is a better option, but not
+    # always installed.
+    # 
+    # To reduce the likely-hood of a tie we sleep a random amount of
+    # time, between 0 and 0.5 seconds. In theory, one script will be
+    # the fastest here. Though, I supposed the race still depends on
+    # when the scripts were started.
+    sleep $(awk "BEGIN {printf \"%.4f\",$(($RANDOM%100))/500}")
+
+    # If lastPID is not null and a process with that pid exists , exit
+    [ ! -z "$lastPID" -a -d /proc/$lastPID ] && exit
+    #echo not running
+
+    # Save my pid in the lock file
+    echo $$ > $lockfile
+
+    # Set up signal traps so we clean up the lock if we are terminated
+    trap "[ -f $lockfile ] && /bin/rm -f $lockfile && exit" 0 1 2 3 13 15
+}
