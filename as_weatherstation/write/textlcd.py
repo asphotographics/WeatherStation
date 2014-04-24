@@ -148,7 +148,9 @@ class AS_WS_WRITER_TEXTLCD(mod_ws_write_abstract.AS_WS_WRITER):
         from as_weatherstation.util import getInterfaces
         
         # Split the latest sample off from the previous ones
-        if len(samples) > 1:
+        if len(samples) = 0:
+            return
+        elif len(samples) > 1:
             current = samples[-1]
             recent = samples[0:-1]
         else:
