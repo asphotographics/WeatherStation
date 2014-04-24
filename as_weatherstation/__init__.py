@@ -20,3 +20,9 @@
 # and the application shouldn't skip a beat.
 import site, os
 site.addsitedir(os.getcwd())
+
+"""
+import sys
+from pprint import pprint
+pprint(sys.path)
+"""
