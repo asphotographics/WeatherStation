@@ -205,11 +205,11 @@ get_lock()
     # different pid so will not prevent script running again.
 
     # Create empty lock file if none exists
-    cat /dev/null >> $lockfile
-    read lastPID < $lockfile
+    cat /dev/null >> "$lockfile"
+    read lastPID < "$lockfile"
 
     # There is a race condition between when we read the .pid, check
-    # for a running process and then write our .pid here. In other
+    # for a running process and then write our .pid. In other
     # words, if scripts are spawned really quickly we may end up with
     # multiple processes running. flock is a better option, but not
     # always installed.
@@ -217,15 +217,20 @@ get_lock()
     # To reduce the likely-hood of a tie we sleep a random amount of
     # time, between 0 and 0.5 seconds. In theory, one script will be
     # the fastest here. Though, I supposed the race still depends on
-    # when the scripts were started.
-    sleep $(awk "BEGIN {printf \"%.4f\",$(($RANDOM%100))/500}")
+    # when the scripts were started, so let's forget the sleep.
+    #sleep $(awk "BEGIN {printf \"%.4f\",$(($RANDOM%100))/500}")
 
-    # If lastPID is not null and a process with that pid exists , exit
+    # Another lock method is to use a mkdir, which is an atomic
+    # operation and returns zero on sucess or some error if the
+    # directory could not created (e.g., because it already existed).
+    # http://wiki.bash-hackers.org/howto/mutex
+
+    # If lastPID is not null and a process with that pid exists, exit
     [ ! -z "$lastPID" -a -d /proc/$lastPID ] && exit
     #echo not running
 
     # Save my pid in the lock file
-    echo $$ > $lockfile
+    echo "$$" > "$lockfile"
 
     # Set up signal traps so we clean up the lock if we are terminated
     trap "[ -f $lockfile ] && /bin/rm -f $lockfile && exit" 0 1 2 3 13 15
