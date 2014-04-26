@@ -114,9 +114,13 @@ data/: `- Data, such as log files and messages, are stored here. The folder loca
 - messages.txt `- Info messages related to controller execution. Rotated according to rules in as_weatherstation/log/config.py`
 
 data/log/ `- Data sub-folder containing weather station logs`
+
 data/log/downloaded/ `- Data sub-folder containing remote logs downloaded from the FTP server to this instance`
+
 data/log/imported/ `- Data sub-folder containing logs which have been imported into the database`
+
 data/log/uploaded/ `- Data sub-folder containing logs which have been uploaded to the FTP server from this instance`
+
 
 lib sub-folder
 ====
