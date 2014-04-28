@@ -87,6 +87,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+
 ####
 # Copy files from source directory to install directory
 ####
@@ -94,6 +95,11 @@ fi
 echo "Copying contents of '$SRC_DIR' to '$DIR'..."
 cd "$SRC_DIR"
 cp -av * "$DIR"
+
+# Chmod of executables
+chmod -v ugo+x $DIR/controller_*.py
+chmod -v ugo+x $DIR/lib/{pws,initd,watchdog}/*.sh 2> /dev/null
+
 
 ####
 # Install required binaries and packages
@@ -170,11 +176,13 @@ sed -i -e "s/'linux'/'linux2'/" /usr/local/lib/python2.7/dist-packages/Phidgets/
 
 $DIR/lib/initd/_setup.sh
 
+
 ####
 # Setup the watchdog scripts
 ####
 
 $DIR/lib/watchdog/_setup.sh
+
 
 ####
 # Finished
@@ -183,5 +191,9 @@ $DIR/lib/watchdog/_setup.sh
 cd "$ORIG_WD"
 echo ""
 echo "Done installing."
+echo ""
+echo "Use '$DIR/controller_config.py' to create your app.cfg file"
+echo "if you do not already have one."
+echo ""
 
 exit 0
