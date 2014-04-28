@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ### BEGIN INIT INFO
-# Provides:          controller_pws_display
+# Provides:          pws_display
 # Required-Start:    $network $remote_fs $syslog $all
 # Required-Stop:     $network $remote_fs $syslog $all
 # Default-Start:     2 3 4 5
@@ -14,7 +14,7 @@
 # Change the next 3 lines to suit where you install your script and what you want to call it
 DIR=/usr/userapps/pws
 DAEMON=$DIR/controller_pws_display.py
-DAEMON_NAME=controller_pws_display
+DAEMON_NAME=pws_display
 
 # This next line determines what user the script runs as.
 # Root generally not recommended but necessary if you are using the Raspberry Pi GPIO from Python.
@@ -50,8 +50,23 @@ case "$1" in
     status)
         status_of_proc "$DAEMON_NAME" "$DAEMON" && exit 0 || exit $?
         ;;
+
+    daemon)
+        echo "$DAEMON"
+        ;;
+
+    directory)
+        echo "$DIR"
+        ;;
+
     *)
-        echo "Usage: /etc/init.d/$DAEMON_NAME {start|stop|restart|status}"
+        echo "Usage:"
+        echo "/etc/init.d/$DAEMON_NAME {start|stop|restart|status}"
+        echo " - get current status or change status"
+        echo "/etc/init.d/$DAEMON_NAME daemon"
+        echo " - print path of daemon executable"
+        echo "/etc/init.d/$DAEMON_NAME directory"
+        echo " - print path of directory where daemon executable is stored"
         exit 1
         ;;
 

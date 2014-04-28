@@ -52,9 +52,6 @@ handle_watchdog_daemon_check()
     #        handle_watchdog_daemon_check -d path -n name test
     #        handle_watchdog_daemon_check -d path -n name repair
     #
-    #   -d - the path to the daemon executable
-    #   -n - name of the daemon as defined in its /etc/init.d/ script
-    #
     # If watchdog is configured with the test-binary option, then it will try
     # to execute a binary file without any arguements. That binary file can
     # call this function with a daemon path and a daemon name and we will
@@ -66,6 +63,11 @@ handle_watchdog_daemon_check()
     # try to execute binaries in that folder with the argument "test", and if
     # that fails, with the arguement "repair". A binary in the test-directory
     # can call this function to handle the testing and repair of a daemon.
+    #
+    # Usage: check_daemon daemon daemon_name
+    #
+    # - daemon = the path to the daemon executable
+    # - daemon_name - name of the daemon as defined in its /etc/init.d/ script
 
     local daemon daemon_name status OPTIND
 
@@ -97,11 +99,11 @@ handle_watchdog_daemon_check()
             status="$?"
             ;;
 
-        # repair is the same as our default plan (test and then fix)
-        #repair)
-            #repair_for_watchdog "$daemon_name"
-            #exit "$?"
-            #;;
+        # repair requested
+        repair)
+            repair_for_watchdog "$daemon_name"
+            exit "$?"
+            ;;
 
         # no command specified, so test and then repair if necessary.
         *)
@@ -121,6 +123,7 @@ handle_watchdog_daemon_check()
     [ $status -ne 0 ] && exit $status
 }
 
+EXIT_RUN_LOOP=0
 run_loop()
 {
     # Execute a given command inside a run loop
@@ -129,9 +132,11 @@ run_loop()
     #   -n - Numer of times to loop. Zero = forever.
     #   -i - Interval (seconds) to wait between loop executions.
     #   command - string which will be passed to eval
+
+    # Get a run lock
     get_lock
 
-    local iterations counter interval limit OPTIND
+    local iterations counter interval limit sleeppid OPTIND
 
     iterations=100
     counter=0
@@ -158,15 +163,27 @@ run_loop()
     fi
 
     # Enter main run loop
+    EXIT_RUN_LOOP=0
     while [  $counter -lt $limit ]; do
 
-        # Evaluter the command
+        # Evalute the command
         eval "$@"
-        sleep "$interval"
+
+        # Sleep in the background and wait.
+        # wait will exit immediately if a signal is trapped.
+        sleep "$interval" &
+        sleeppid=$!
+        wait $sleeppid
+        kill $sleeppid 2> /dev/null
 
         # If iterations is zero then don't increment counter
         if [ $iterations -gt 0 ]; then
             let counter=counter+1 
+        fi
+
+        # An exit signal might come from outside the run loop
+        if [ $EXIT_RUN_LOOP -ne 0 ]; then
+            break
         fi
 
     done
@@ -178,7 +195,7 @@ run_loop()
 GET_LOCK_RAN=0
 get_lock()
 {
-    # Get a lock using .pdf file.
+    # Get a lock using .pid file.
     # 
     # Usage: get_lock
     #
@@ -205,11 +222,11 @@ get_lock()
     # different pid so will not prevent script running again.
 
     # Create empty lock file if none exists
-    cat /dev/null >> "$lockfile"
-    read lastPID < "$lockfile"
+    cat /dev/null >> $lockfile
+    read lastPID < $lockfile
 
     # There is a race condition between when we read the .pid, check
-    # for a running process and then write our .pid. In other
+    # for a running process and then write our .pid here. In other
     # words, if scripts are spawned really quickly we may end up with
     # multiple processes running. flock is a better option, but not
     # always installed.
@@ -225,13 +242,13 @@ get_lock()
     # directory could not created (e.g., because it already existed).
     # http://wiki.bash-hackers.org/howto/mutex
 
-    # If lastPID is not null and a process with that pid exists, exit
-    [ ! -z "$lastPID" -a -d /proc/$lastPID ] && exit
+    # If lastPID is not null and a process with that pid exists , exit
+    [ ! -z "$lastPID" -a -d /proc/$lastPID ] && exit 0
     #echo not running
 
     # Save my pid in the lock file
-    echo "$$" > "$lockfile"
+    echo $$ > $lockfile
 
-    # Set up signal traps so we clean up the lock if we are terminated
-    trap "[ -f $lockfile ] && /bin/rm -f $lockfile && exit" 0 1 2 3 13 15
+    # Set up signal traps so we clean up the lock if we are terminated, and pass through last exit status
+    trap "EXIT_RUN_LOOP=1 && [ -f $lockfile ] && /bin/rm -f $lockfile && exit" 0 1 2 3 13 15
 }

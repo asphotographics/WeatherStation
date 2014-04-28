@@ -7,7 +7,7 @@
 
 
 # Replace this with the name of the daemon (as found in /etc/init.d) you want to check/tests/repair.
-DAEMON_NAME="pws_main"
+DAEMON_NAME="pws_display"
 
 DIR=`/etc/init.d/$DAEMON_NAME directory`
 DAEMON=`/etc/init.d/$DAEMON_NAME daemon`
