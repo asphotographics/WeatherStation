@@ -27,7 +27,7 @@ else:
 # returned a client_id and secret that your app has to supply to access netatmo servers.
 
 _CLIENT_ID     = ""   # Your client ID from Netatmo app registration at http://dev.netatmo.com/dev/listapps
-_CLIENT_SECRET = ""   # Your client app secret
+_CLIENT_SECRET = ""   # Your client app secret   '     '
 _USERNAME      = ""   # Your netatmo account username
 _PASSWORD      = ""   # Your netatmo account password
 
@@ -53,6 +53,7 @@ SENSOR_PROPERTIES = {
         'Humidity' : 'b',
         'Noise' : 'S',
         'Pressure' : 'e',
+        'Rain' : 'f',
         'When' : 'K'
         }
 
@@ -73,7 +74,6 @@ class ClientAuth:
                 "password" : password,
                 "scope" : "read_station"
                 }
-
         resp = postRequest(_AUTH_REQ, postParams)
 
         self._clientId = clientId
