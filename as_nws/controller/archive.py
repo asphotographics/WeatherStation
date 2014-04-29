@@ -126,7 +126,7 @@ class AS_CONTROLLER_NETATMO_ARCHIVE(mod_ws_controller_abstract.AS_CONTROLLER_ABS
 
 
             # Only look at stations of type Netatmo device or module
-            if not s.stype in [mod_ws_app.STYPE_NETATMO_DEVICE, mod_ws_app.STYPE_NETATMO_MODULE]:
+            if not s.stype in mod_ws_app.NETATMO_STYPE_LOOKUP.values():
                 continue
 
 
@@ -166,7 +166,8 @@ class AS_CONTROLLER_NETATMO_ARCHIVE(mod_ws_controller_abstract.AS_CONTROLLER_ABS
                 'scale': 'max',
                 'beginTime': beginTime,
                 'endTime': None,
-                'limit': None
+                'limit': None,
+                'station': s
                 }
             #pprint(params)
 
