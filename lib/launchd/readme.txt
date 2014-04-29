@@ -10,4 +10,4 @@ The Apple Developer pages describe the launchd system and daemon/agent plist par
 
 https://developer.apple.com/library/mac/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html#//apple_ref/doc/uid/10000172i-SW7-BCIEDDBJ
 
-If you create your own luanchd plists, make sure to add an environemnet variable for LANG (en_CA.UTF-8, or whatever echo $LANG at the command-line would return). This will for sure be needed by the ftputil package.
+If you create your own luanchd plists, make sure to add an environment variable for LANG (en_CA.UTF-8, or whatever echo $LANG at the command-line would return). This will for sure be needed by the ftputil package.

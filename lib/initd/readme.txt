@@ -13,3 +13,5 @@ daemonize Python scripts:
 http://blog.scphillips.com/2013/07/getting-a-python-script-to-run-in-the-background-as-a-service-on-boot/
 
 For controllers that need only be run periodically and quit after performing a specific task, such as controller_log_rotate.py, use cron to control the launch interval.
+
+_setup.py can be used to configure and install the init scripts.
