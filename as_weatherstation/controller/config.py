@@ -791,29 +791,23 @@ class AS_CMD_MAIN(AS_CMD_ABSTRACT):
 
         if not self.config.has_section('stations'):
             self.config.add_section('stations')
-        
-        stations = self.config.items('stations', raw=True)
+       
+        # Get a new station ID 
+        (stationID, sLabel) = AS_CMD_MAIN.getStationID(self.config, s);
 
-        # Get new station ID
-        previousStationID = 0
-        maxID = 0
-        for (sLabel, stationID) in stations:
-            stationID = int(stationID)
-            maxID = max(stationID, previousStationID)
-            if s == sLabel:
-                print ""
-                print "ERROR: Station '%s' already exists with ID %d" % (sLabel, stationID)
-                print ""
-                print "Try 'edit_station %s'" % sLabel
-                print ""
-                return
-
-        nextStationID = maxID + 1
+        # If the return ID is already associated with our label, then return an error.
+        if s == sLabel:
+            print ""
+            print "ERROR: Station '%s' already exists with ID %d" % (sLabel, stationID)
+            print ""
+            print "Try 'edit_station %s'" % sLabel
+            print ""
+            return
 
         # Create the station option in [stations]
-        self.config.set('stations', s, str(nextStationID))
+        self.config.set('stations', s, str(stationID))
         print ""
-        print "OKAY: Station '%s' created with new ID %d" % (s, nextStationID)
+        print "OKAY: Station '%s' created with new ID %d" % (s, stationID)
         print ""
 
         # Prompt for stype
@@ -822,8 +816,43 @@ class AS_CMD_MAIN(AS_CMD_ABSTRACT):
             return stype
 
         # Configure the station
-        sectionName = 'station%d' % nextStationID
+        sectionName = 'station%d' % stationID
         self._setup(AS_CMD_SECTION_STATION, sectionName, 'all', stype=stype)
+
+
+    @staticmethod
+    def getStationID(config, aLabel=""):
+        """
+        @brief Get the ID for the given station label, or the next ID if the label does
+        not exist in the config.
+
+        @parm config AS_CONFIGPARSER object - The config parser to look in for stations.
+        @parm aLabel str - A station label to lookup. If the label is empty we will
+            return the next incremental ID. If the label is missing in the station list
+            we will return the next incremental ID.
+
+        @return tuple (stationID, sLabel) - If sLabel is empty, then stationID is the
+            next incremental ID. If sLabel is not empty, then stationID is the ID
+            of the pre-existing station.
+        """
+
+        try:
+            stations = config.items('stations', raw=True)
+        except ConfigParser.NoSectionError as e:
+            stations = {}
+        
+        # Get new station ID
+        previousStationID = 0
+        maxID = 0
+        for (sLabel, stationID) in stations:
+            stationID = int(stationID)
+            maxID = max(stationID, previousStationID)
+            if aLabel == sLabel:
+                return (stationID, sLabel)
+
+        nextStationID = maxID + 1
+
+        return (nextStationID, '')
 
 
     def _selectStationType(self):
@@ -969,7 +998,7 @@ class AS_CMD_SECTION_ABSTRACT(AS_CMD_ABSTRACT):
 
         
     def help_explain(self):
-        """ Run paretn's help_explain() and then print some sub-class specific info. """
+        """ Run parent's help_explain() and then print some sub-class specific info. """
         super(AS_CMD_SECTION_ABSTRACT, self).help_explain()
         print "explain <option>"
         print "    See an explanation of <option> in [%s]" % self.section
@@ -1307,6 +1336,156 @@ class AS_CMD_SECTION_NETATMO(AS_CMD_SECTION_ABSTRACT):
         ('oldestTimestamp', str)
         ])
 
+    def help_api_stations(self):
+        print ""
+        print "api_stations"
+        print "    Create/update Netatmo stations based on the info returned by the Netatmo API."
+        print "    If a matching station already exists in the config it will be updated."
+        print "    If no matching station exists in the config then a new station is created with"
+        print "    a new ID."
+        print ""
+        print "    The [netatmo] options clientID, clientSecret, username, password are required"
+        print "    to be set for this to work."
+        print ""
+
+    def do_api_stations(self, s):
+        """
+        @brief Configure stations based on the devices/modules returned by the Netatmo API
+
+        The [netatmo] options clientID, clientSecret, username, password are required
+        to be set for this to work. A list of devices/modules will be retrieved from the
+        Netatmo API. If station label matches an existing station, then we offer to update
+        that station, otherwise, we offer to add a new station. User can skip adding
+        or updating of some or all of the stations.
+
+        @parm s str - ignored
+        """
+
+        import urllib2
+
+        # Sub-class AS_NWS_APP so we can set an alternative config object.
+        import as_nws.app as mod_nws_app
+        class NETATMO_APP(mod_nws_app.AS_NWS_APP):
+            """ Temporary AS_NWS_APP class extension so we can inject our own config """
+            def __init__(self, config):
+                self._config = config
+                super(NETATMO_APP, self).__init__()
+
+
+        # Get a Netatmo app object with our config
+        try:
+            app = NETATMO_APP(self.config)
+        except ConfigParser.NoOptionError as e:
+            # [netatmo] options clientID, clientSecret, username, password are probably not set
+            print ""
+            print "ERROR: %s" % e.message
+            print "ERROR: Trying runing the 'set' command first."
+            print ""
+            return
+
+
+        # Get the api stations
+        try:
+            stations = app.listNetatmoAPIStations()
+        except urllib2.HTTPError as e:
+            # [netatmo] options clientID, clientSecret, username, password are probably wrong
+            print ""
+            print "ERROR: Problem connecting to the Netatmo API."
+            print "ERROR: Check [netatmo] API option values with 'help set'."
+            print ""
+            return
+
+
+        # If no stations, then show a warning and return
+        if not stations:
+            print ""
+            print "WARNING: Zero devices or modules returned by the Netatmo API. Cannot add/or update stations."
+            print ""
+            return
+
+
+        # Make sure the [stations] section exists
+        if not self.config.has_section('stations'):
+            self.confi.add_section('stations')
+
+
+        # Show the api stations to the user
+        print ""
+        print "%d device/module stations returned by the Netatmo API:" % len(stations)
+        for sLabel in stations:
+            print ""
+            if stations[sLabel].id:
+                print "%s (Existing ID = %s)" % (sLabel, stations[sLabel].id)
+            else:
+                print "%s (NEW)" % sLabel
+            print "===================="
+            section = "station%s" % stations[sLabel].id
+
+
+            # Loop through the known options and show the values to the user.
+            # Set the values aside in case we want to add/update this station.
+            options = OrderedDict()
+            for o in stations[sLabel].optionsSpec():
+
+                try:
+
+                    noOption = {'boolean': True}
+                    if stations[sLabel].id:
+                        v = super(AS_CMD_SECTION_ABSTRACT, self).getConfigValue(section, o, noOption, self.config)
+
+                    if noOption['boolean'] == False and stations[sLabel].__dict__[o] != v:
+                        print "%s = %s (current value = %s)" % (o, stations[sLabel].__dict__[o], v)
+                    else:
+                        print "%s = %s" % (o, stations[sLabel].__dict__[o])
+
+                    options[o] = stations[sLabel].__dict__[o]
+
+                except AttributeError as e:
+                    pass
+
+
+            # Ask the user if they want add/update this station
+            print ""
+            if stations[sLabel].id:
+                print "Do you want to UPDATE this station?"
+                prompt = self.concatPrompt(self.prompt, section)
+            else:
+                print "Do you want to ADD this station?"
+                prompt = self.concatPrompt(self.prompt, 'add_station')
+            s = self.rawInput(prompt=prompt, choices=['yes', 'no'])
+            if isinstance(s, bool):
+                return bool
+
+            if s == "no":
+                continue
+
+
+            # Add or update the station
+            if not stations[sLabel].id:
+                # Get next ID
+                (stationID, aLabel) = AS_CMD_MAIN.getStationID(self.config, sLabel)
+                if aLabel:
+                    print ""
+                    print "ERROR: station with label '%s' already exists" % sLabel
+                    print ""
+                    continue
+                # Add station to [stations] and add [station*] section
+                stationSection = "station%d" % int(stationID)
+                self.config.set('stations', sLabel, str(stationID))
+                self.config.add_section(stationSection)
+            else:
+                stationID = stations[sLabel].id
+                stationSection = "station%d" % int(stationID)
+
+            for o in options:
+                    self.config.set(stationSection, o, str(options[o]))
+
+
+        print ""
+        print "OKAY: Done with Netatmo API stations."
+        print ""
+
+
 class AS_CMD_SECTION_STATION(AS_CMD_SECTION_ABSTRACT):
     """
     @brief A Cmd sub-class for the [station*] sections of config.
@@ -1325,7 +1504,7 @@ class AS_CMD_SECTION_STATION(AS_CMD_SECTION_ABSTRACT):
     Station type should also be passed into the constructor
     so we can set ourselves up properly for that stype.
 
-    Station section options (and there supported types)
+    Station section options (and their supported types)
     are not defined here. They are retrieved from the
     as_weatherstation.app module.
     """
