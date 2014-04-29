@@ -72,6 +72,7 @@ def config(errorFile, params):
                 'class': 'as_weatherstation.log.dbhandler.DBHandler',
                 'formatter': 'message',
                 'level': 'INFO',
+                'delay': True,
                 'wsApp': params['wsApp']
                 },
             },

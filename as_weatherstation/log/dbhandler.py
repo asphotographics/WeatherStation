@@ -27,18 +27,24 @@
     Copyright (C) 2001-2004 Vinay Sajip. All Rights Reserved.
     """
 import sys, string, time, logging
+import MySQLdb
 import as_weatherstation.app as mod_ws_app
 
 class DBHandler(logging.Handler):
-    def __init__(self, wsApp=None):
+    def __init__(self, wsApp=None, delay=True):
         
         logging.Handler.__init__(self)
 
-        self.setApp(wsApp)
+        self.delay = True
+        self.conn = None
+        self.cursor = None
+
         self.host = ''
         self.user = ''
         self.password = ''
         self.database = ''
+
+        self.setApp(wsApp)
 
 
     def setApp(self, wsApp):
@@ -48,15 +54,13 @@ class DBHandler(logging.Handler):
         if self.app is None:
             return
 
-        import MySQLdb
-
         self.host = self.app.db[mod_ws_app.DB_MAIN].host
         self.user = self.app.db[mod_ws_app.DB_MAIN].user
         self.password = self.app.db[mod_ws_app.DB_MAIN].passwd
         self.database = self.app.db[mod_ws_app.DB_MAIN].db
 
-        self.conn = MySQLdb.connect(self.host, self.user, self.password, self.database)
-        self.cursor = self.conn.cursor()
+        if not self.delay:
+            self.connect()
        
         # Get the names of the measurement fields from the app
         # and dynamically build the SQL formatter.
@@ -78,8 +82,9 @@ class DBHandler(logging.Handler):
             );
             """ % (",\n".join(cols), ",\n".join(vals))
 
-        
-    
+    def connect(self):
+        self.conn = MySQLdb.connect(self.host, self.user, self.password, self.database)
+        self.cursor = self.conn.cursor()
     
     def formatDBTime(self, record):
         record.dbtime = time.strftime("%Y-%m-%d %H:%M:%S", record.sample.dateTime)
@@ -104,6 +109,8 @@ class DBHandler(logging.Handler):
             else:
                 record.exc_text = ""
             sql = self.SQL % record.__dict__
+            if self.cursor is None:
+                self.connect()
             self.cursor.execute(sql)
             self.conn.commit()
         except:
@@ -113,7 +120,7 @@ class DBHandler(logging.Handler):
             del ei
     
     def close(self):
-        if hasattr(self, 'cursor'):
+        if not self.cursor is None:
             self.cursor.close()
             self.conn.close()
         logging.Handler.close(self)
