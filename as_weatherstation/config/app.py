@@ -4,6 +4,10 @@
 import ConfigParser
 
 
+DEFAULT_FILE_PATH = 'app.cfg'
+
+
+
 class AS_CONFIGPARSER_EXCEPTION(Exception):
 
     def __init__(self, code, message):
@@ -29,7 +33,7 @@ class AS_CONFIGPARSER(ConfigParser.SafeConfigParser, object):
 
         #super(AS_PWS_APP, self).__init__()
         self.optionxform = str # we don't want option names transformed -- spell them correctly!
-        self.filePath = 'app.cfg'
+        self.filePath = DEFAULT_FILE_PATH
         self.mode = 'new'
 
 
@@ -95,15 +99,19 @@ class AS_CONFIGPARSER(ConfigParser.SafeConfigParser, object):
         return super(AS_CONFIGPARSER, self).read(filenames)
 
 
-
-
-
 # Factory
+_config = None
 def getConfig():
 
-    config = AS_CONFIGPARSER()
-    config.read()
-    return(config)
+    global _config
+
+    if not _config is None:
+        return _config
+
+    _config = AS_CONFIGPARSER()
+    _config.read()
+    return(_config)
+
 
 
 def getStationOption(config, otypes, section, option):
