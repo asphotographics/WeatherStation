@@ -4,8 +4,9 @@
 import os
 from collections import OrderedDict
 import re
-
 import ConfigParser
+
+import config.app as mod_config_app
 
 # Bitwise measurement types
 MEASURE_ABSTRACT = 0
@@ -25,6 +26,13 @@ STYPE_PWS = 'STYPE_PWS'
 STYPE_NETATMO_DEVICE = 'STYPE_NETATMO_DEVICE'
 STYPE_NETATMO_MODULE = 'STYPE_NETATMO_MODULE'
 STYPE_NETATMO_MODULE_INDOOR = 'STYPE_NETATMO_MODULE_INDOOR'
+STYPE_NETATMO_MODULE_RAIN_GAUGE = 'STYPE_NETATMO_MODULE_RAIN_GAUGE'
+
+NETATMO_STYPE_LOOKUP = OrderedDict()
+NETATMO_STYPE_LOOKUP['NAMain'] = STYPE_NETATMO_DEVICE
+NETATMO_STYPE_LOOKUP['NAModule1'] = STYPE_NETATMO_MODULE
+NETATMO_STYPE_LOOKUP['NAModule4'] = STYPE_NETATMO_MODULE_INDOOR
+NETATMO_STYPE_LOOKUP['NAModule3'] = STYPE_NETATMO_MODULE_RAIN_GAUGE
 
 
 # Phidget Weather Station IO type constants
@@ -52,8 +60,8 @@ class AS_WS_APP(object):
         import socket
         self.hostname = socket.gethostname()
 
-        import config.app as mod_config_app
-        self._config = mod_config_app.getConfig()
+        if not hasattr(self, '_config'):
+            self._config = mod_config_app.getConfig()
 
 
         # Log file location
@@ -130,12 +138,15 @@ class AS_WS_APP(object):
         # seperate database config for your development environment versus production.
         dbSection = "database_main_%s" % self.hostname.lower()
         if not self._config.has_section(dbSection): dbSection = 'database_main'
-        self.db[DB_MAIN] = AS_DB_CONNECT(
-            self._config.get(dbSection, 'host'),
-            self._config.get(dbSection, 'user'),
-            self._config.get(dbSection, 'password'),
-            self._config.get(dbSection, 'database')
-            )
+        try:
+            self.db[DB_MAIN] = AS_DB_CONNECT(
+                self._config.get(dbSection, 'host'),
+                self._config.get(dbSection, 'user'),
+                self._config.get(dbSection, 'password'),
+                self._config.get(dbSection, 'database')
+                )
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
+             self.db[DB_MAIN] = AS_DB_CONNECT('', '', '', '')
 
 
         try:
@@ -218,6 +229,32 @@ class AS_WS_APP(object):
             MEASURE_NOISE: None,
             MEASURE_SEA_LEVEL_BAROMETRIC_PRESSURE: None,
             MEASURE_PRECIPITATION: None
+        }
+
+        # Map of Netatmo measurment names available on an indoor additional module
+        self.fieldMap[STYPE_NETATMO_MODULE_INDOOR] = {
+            MEASURE_TEMPERATURE: 'Temperature',
+            MEASURE_RELATIVE_HUMIDITY: 'Humidity',
+            MEASURE_STATION_BAROMETRIC_PRESSURE: None,
+            MEASURE_PRECIPITATION_WEIGHT: None,
+            MEASURE_INTERNAL_TEMPERATURE: None,
+            MEASURE_CO2: 'Co2',
+            MEASURE_NOISE: None,
+            MEASURE_SEA_LEVEL_BAROMETRIC_PRESSURE: None,
+            MEASURE_PRECIPITATION: None
+        }
+
+        # Map of Netatmo measurment names available on a rain gauge
+        self.fieldMap[STYPE_NETATMO_MODULE_RAIN_GAUGE] = {
+            MEASURE_TEMPERATURE: None,
+            MEASURE_RELATIVE_HUMIDITY: None,
+            MEASURE_STATION_BAROMETRIC_PRESSURE: None,
+            MEASURE_PRECIPITATION_WEIGHT: None,
+            MEASURE_INTERNAL_TEMPERATURE: None,
+            MEASURE_CO2: None,
+            MEASURE_NOISE: None,
+            MEASURE_SEA_LEVEL_BAROMETRIC_PRESSURE: None,
+            MEASURE_PRECIPITATION: 'Rain'
         }
 
         # Map of Phidget sensor/input numbers
@@ -400,6 +437,23 @@ class AS_WS_APP(object):
         return (re.compile('\.gz$').search(aFile) is not None)
 
 
+    @staticmethod
+    def labelToUpperUnderscore(s):
+        """
+        Static helper method which formats a label as UPPER_CASE_UNDERSCORE_SEPERATED.
+
+        @parm s str - A string. Unicode strings are encoded as utf-8
+
+        @return string
+        """
+
+        regex = re.compile(' ')
+        if type(s) == unicode:
+            s = s.encode('utf-8')
+        return regex.sub("_", s.upper())
+
+
+
 
 
 class AS_WS_STATION_ABSTRACT(object):
@@ -499,13 +553,17 @@ class AS_WS_STATION_NETATMO_MODULE(AS_WS_STATION_NETATMO_DEVICE):
 class AS_WS_STATION_NETATMO_MODULE_INDOOR(AS_WS_STATION_NETATMO_MODULE):
     pass
 
+class AS_WS_STATION_NETATMO_MODULE_RAIN_GAUGE(AS_WS_STATION_NETATMO_MODULE):
+    pass
+
 
 # Station class lookup
 STYPE_CLASS_LOOKUP = OrderedDict([
     (STYPE_PWS, AS_WS_STATION_PWS),
     (STYPE_NETATMO_DEVICE, AS_WS_STATION_NETATMO_DEVICE),
     (STYPE_NETATMO_MODULE, AS_WS_STATION_NETATMO_MODULE),
-    (STYPE_NETATMO_MODULE_INDOOR, AS_WS_STATION_NETATMO_MODULE_INDOOR)
+    (STYPE_NETATMO_MODULE_INDOOR, AS_WS_STATION_NETATMO_MODULE_INDOOR),
+    (STYPE_NETATMO_MODULE_RAIN_GAUGE, AS_WS_STATION_NETATMO_MODULE_RAIN_GAUGE)
     ])
 
 
